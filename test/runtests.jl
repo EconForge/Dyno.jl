@@ -1,5 +1,8 @@
 using Dyno
 using Base.Test
 
-# write your own tests here
-@test 1 == 2
+rootdir = Pkg.dir("Dyno")
+
+include("test_model_import.jl")
+
+include("test_trisystem.jl")
