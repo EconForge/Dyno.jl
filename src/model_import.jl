@@ -32,11 +32,16 @@ function Model(symbols, equations, calibration, exogenous)
     v_args = cat(1, sym_vars, sym_exo)
 
 
+    # analyze equations
+    it = Dolang.IncidenceTable(equations)
+
+    # we list the variables of the dynamic equations
+    # only variables which appear symbolically are added to that vector
     v_args = cat(1,
-                [(v,1) for v in sym_vars],
-                [(v,0) for v in sym_vars],
-                [(v,-1) for v in sym_vars],
-                [(v,0) for v in sym_exo]
+                [(v,1) for v in sym_vars if v in it.by_date[1]],
+                [(v,0) for v in sym_vars if v in it.by_date[0]],
+                [(v,-1) for v in sym_vars if v in it.by_date[-1]],
+                [(v,0) for v in sym_exo if v in it.by_date[0]]
             )
     ss_args = cat(1,
                 [(v,0) for v in sym_vars],
@@ -50,26 +55,15 @@ function Model(symbols, equations, calibration, exogenous)
 
     # steady-state equations
     ss_equations = [Dolang.steady_state(eq) for eq in equations]
-    code_s_0 = make_method(Der{0}, MyType, ss_equations, ss_args, p_args; funname=:f_s)
-    code_s_1 = make_method(Der{1}, MyType, ss_equations, ss_args, p_args; funname=:f_s)
-    fun_temp_2 = eval(code_s_0)
-    fun_temp_2 = eval(code_s_1)
-    f_s(der, v, p) = fun_temp_2(der, MyType(), v, p)
 
-    code_0 = make_method(Der{0}, MyType, equations, v_args, p_args;funname=:f)
-    code_1 = make_method(Der{1}, MyType, equations, v_args, p_args; funname=:f)
-    ff = FunctionFactory(MyType, equations, v_args, p_args, funname=:f)
-    code_2 = Dolang.build_function(ff, Der{2})
+    # create functions
+    code_1 = make_method(ss_equations, ss_args, p_args, funname=:f_s, orders=[0,1])
+    fun_temp_s = eval(code_1)
+    code_2 = make_method(equations, v_args, p_args, funname=:f_d, orders=[0,1])
+    fun_temp_d = eval(code_2)
+    println(code_2)
 
-
-    fun_temp_1 = eval(code_0)
-    fun_temp_1 = eval(code_1)
-    fun_temp_1 = eval(code_2)
-
-
-    f_d(der, v, p) = fun_temp_1(der, MyType(), v, p)
-
-    functions = Functions(f_s,f_d)
+    functions = Functions(fun_temp_s,fun_temp_d)
 
     m = Model(symbols, equations, calibration, calibration_grouped, exogenous, functions)
 

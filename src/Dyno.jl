@@ -8,6 +8,7 @@ module Dyno
     using Distributions
     using Dolang
     import Dolang
+    import Dolang: Der
 
     include("trisystem.jl")
     include("modfile_parsing.jl")
