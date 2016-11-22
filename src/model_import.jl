@@ -19,13 +19,13 @@ end
 function Model(symbols, equations, calibration, exogenous)
 
     calibration_grouped = OrderedDict{Symbol,Array{Float64,1}}()
-    for vg in [:variables,:exogenous,:parameters]
+    for vg in [:endogenous,:exogenous,:parameters]
         calibration_grouped[vg] =  [calibration[v] for v in symbols[vg]]
     end
 
     # create functions
 
-    sym_vars = symbols[:variables]
+    sym_vars = symbols[:endogenous]
     sym_parms = symbols[:parameters]
     sym_exo = symbols[:exogenous]
 
@@ -85,7 +85,7 @@ function import_data(model_data)
     symbols_str = model_data["symbols"]
 
     symbols = OrderedDict()
-    for k_str in ["variables", "exogenous", "parameters"]
+    for k_str in ["endogenous", "exogenous", "parameters"]
         if k_str in keys(symbols_str)
             symbols[Symbol(k_str)] = [Symbol(x) for x in symbols_str[k_str]]
         end

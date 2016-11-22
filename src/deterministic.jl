@@ -50,7 +50,7 @@ function deterministic(model, exogenous_series; verbose=false, N=20)
 
 
     symbols = model.symbols
-    variables = symbols[:variables]
+    endogenous = symbols[:endogenous]
     exogenous = symbols[:exogenous]
     parameters = symbols[:parameters]
 
@@ -60,13 +60,13 @@ function deterministic(model, exogenous_series; verbose=false, N=20)
     cur_syms = it.by_date[0]
     past_syms = it.by_date[-1]
 
-    fut_inds = [i for (i,v) in enumerate(variables) if v in it.by_date[1]]
-    cur_inds = [i for (i,v) in enumerate(variables) if v in it.by_date[0]]
-    past_inds = [i for (i,v) in enumerate(variables) if v in it.by_date[-1]]
+    fut_inds = [i for (i,v) in enumerate(endogenous) if v in it.by_date[1]]
+    cur_inds = [i for (i,v) in enumerate(endogenous) if v in it.by_date[0]]
+    past_inds = [i for (i,v) in enumerate(endogenous) if v in it.by_date[-1]]
     shocks_inds = [i for (i,v) in enumerate(exogenous) if v in it.by_date[0]]
     parms_inds = [i for (i,v) in enumerate(parameters) if v in it.by_date[0]]
 
-    P = length(symbols[:variables])
+    P = length(symbols[:endogenous])
     indices = fut_inds
     indices = cat(1,indices, P+cur_inds)
 
@@ -86,7 +86,7 @@ function deterministic(model, exogenous_series; verbose=false, N=20)
     f_d = model.functions.f_dynamic
 
 
-    y0 = [model.calibration[e] for e in model.symbols[:variables]]
+    y0 = [model.calibration[e] for e in model.symbols[:endogenous]]
     e0 = [model.calibration[e] for e in model.symbols[:exogenous]]
     p = [model.calibration[e] for e in model.symbols[:parameters]]
 
@@ -114,7 +114,7 @@ function deterministic(model, exogenous_series; verbose=false, N=20)
     y_init_0 = [(1-l)*y_start + l*y_final for l in linspace(0,1,N)]
     y_init = cat(1, [e' for e in y_init_0]...) :: Array{Float64, 2}
 
-    n_y = length(model.symbols[:variables])
+    n_y = length(model.symbols[:endogenous])
     n_e = length(model.symbols[:exogenous])
 
 
@@ -155,7 +155,7 @@ function deterministic(model, exogenous_series; verbose=false, N=20)
     tvec = collect(0:(size(sol,1)-1))
     sol = cat(2,tvec,sol,exogenous)
 
-    colnames = cat(1, [:t], model.symbols[:variables], model.symbols[:exogenous])
+    colnames = cat(1, [:t], model.symbols[:endogenous], model.symbols[:exogenous])
     columns = Dict(colnames[i] => sol[:,i] for i=1:size(sol,2))
     return DataFrame(columns)
 end

@@ -42,8 +42,8 @@ function modfile_parser(mod_file_name)
 
   # Get variable names
   tmp = match(r"var\s(.*?);", text)
-  variables = split(tmp[1], " ")
-  filter!(x -> ismatch(r"\S", x), variables) # Remove lines if no chars present
+  endogenous = split(tmp[1], " ")
+  filter!(x -> ismatch(r"\S", x), endogenous) # Remove lines if no chars present
 
   # Get exogenous variable names
   tmp = match(r"varexo\s(.*?);", text)
@@ -139,7 +139,7 @@ function modfile_parser(mod_file_name)
   end
 
   data = Dict()
-  data["symbols"] = Dict("variables"=>variables, "exogenous"=>shocks, "parameters"=>parameters)
+  data["symbols"] = Dict("endogenous"=>endogenous, "exogenous"=>shocks, "parameters"=>parameters)
   data["equations"] = equations
   data["calibration"] = merge(parameter_values, initval)
   exogenous = Dict("tag"=>"Normal", "sigma"=>shock_matrix)
