@@ -61,7 +61,6 @@ function Model(symbols, equations, calibration, exogenous)
     fun_temp_s = eval(code_1)
     code_2 = make_method(equations, v_args, p_args, funname=:f_d, orders=[0,1])
     fun_temp_d = eval(code_2)
-    println(code_2)
 
     functions = Functions(fun_temp_s,fun_temp_d)
 
@@ -96,7 +95,8 @@ function import_data(model_data)
     cdict = Dict{Symbol, Union{Expr,Float64, Int64}}(Symbol(k)=>parse(String(v)) for (k,v) in  model_data["calibration"])
     calibration = triangular_system(cdict)
 
-    p = length(model_data["exogenous"]["sigma"])
+    p = size(model_data["exogenous"]["sigma"],1)
+
     sigma = zeros(p,p)
     for i=1:size(sigma,1)
         for j=1:size(sigma,2)
