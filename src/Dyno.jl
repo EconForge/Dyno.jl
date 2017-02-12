@@ -7,6 +7,7 @@ module Dyno
     using DataStructures
     using Distributions
     using Dolang
+    import JSON
     import Dolang
     import Dolang: Der
 

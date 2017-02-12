@@ -1,5 +1,3 @@
-import Dolang
-
 immutable MyType end
 
 type Functions
@@ -20,7 +18,12 @@ function Model(symbols, equations, calibration, exogenous)
 
     calibration_grouped = OrderedDict{Symbol,Array{Float64,1}}()
     for vg in [:endogenous,:exogenous,:parameters]
-        calibration_grouped[vg] =  [calibration[v] for v in symbols[vg]]
+        if vg == :parameters
+            default = NaN
+        else
+            default = 0.0
+        end
+        calibration_grouped[vg] =  [get(calibration,v,default) for v in symbols[vg]]
     end
 
     # create functions
@@ -79,40 +82,77 @@ function parse_equation(eq_string)
     end
 end
 
+
+function read_modfile(modfile)
+    root_dir = Pkg.dir("Dyno")
+    dynare_exe = joinpath(root_dir, "bin", "dynare_m")
+
+    out = try
+        readstring(`$dynare_exe $modfile json jsonstdout`)
+    catch y
+        # TODO: find a way to capture output
+        try run(`$dynare_exe $modfile json`) end
+        error("Modfile parsing failed")
+    end
+
+    regex =  r"\{(.*)\}"s
+    m = match(regex, out)
+    model_data = JSON.parse(m.match)
+    return model_data
+end
+
 function import_data(model_data)
 
-    symbols_str = model_data["symbols"]
+    # symbols_str = model_data["symbols"]
 
     symbols = OrderedDict()
     for k_str in ["endogenous", "exogenous", "parameters"]
-        if k_str in keys(symbols_str)
-            symbols[Symbol(k_str)] = [Symbol(x) for x in symbols_str[k_str]]
+        if k_str in keys(model_data)
+            symbols[Symbol(k_str)] = [Symbol(strip(x["name"])) for x in model_data[k_str]]
+        end
+    end
+    #
+    equations = [parse_equation(ee["equation"]) for ee in model_data["model"]]
+    #
+    #list all declaration statements
+    decl_stmts = []
+    for stmt in model_data["statements"]
+        if stmt["statementName"] == "param_init"
+            push!(decl_stmts, stmt)
+        elseif stmt["statementName"] == "init_val"
+            push!(decl_stmts, stmt["vals"]...)
         end
     end
 
-    equations = [parse_equation(ee) for ee in model_data["equations"]]
-
-    cdict = Dict{Symbol, Union{Expr,Float64, Int64}}(Symbol(k)=>parse(String(v)) for (k,v) in  model_data["calibration"])
-    calibration = triangular_system(cdict)
-
-    p = size(model_data["exogenous"]["sigma"],1)
-
-    sigma = zeros(p,p)
-    for i=1:size(sigma,1)
-        for j=1:size(sigma,2)
-            sigma[i,j] = eval(parse(model_data["exogenous"]["sigma"][i,j]))
+    cdict = Dict{Symbol, Union{Symbol, Expr, Float64, Int64}}() #Symbol(k)=>parse(String(v)) for (k,v) in  model_data["calibration"])
+    for stmt in decl_stmts
+        val = stmt["value"]
+        if typeof(val) <: String
+            cdict[Symbol(stmt["name"])] = parse(val)
+        else
+            cdict[Symbol(stmt["name"])] = val
         end
+    end
+
+    calibration = Dolang.solve_triangular_system(cdict)
+
+    #
+    p = length(symbols[:exogenous])
+    sigma = zeros(p,p)
+    for i in 1:p
+        # This is really rediculous ! (to avoid degenerate distribution)
+        sigma[i,i]=1e-10
     end
 
     exogenous = MultivariateNormal(zeros(size(sigma,1)), sigma)
+
     model = Model(symbols, equations, calibration, exogenous)
     return model
 
 end
 
-
-function import_modfile(filename)
-    model_data = modfile_parser(filename)
+function import_model(filename)
+    model_data = read_modfile(filename)
     model = import_data(model_data)
     return model
 end
