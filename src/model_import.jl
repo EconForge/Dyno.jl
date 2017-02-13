@@ -85,7 +85,7 @@ end
 
 function read_modfile(modfile)
     root_dir = Pkg.dir("Dyno")
-    dynare_exe = joinpath(root_dir, "bin", "dynare_m")
+    dynare_exe = joinpath(root_dir, "deps", "usr", "bin", "dynare_m")
 
     out = try
         readstring(`$dynare_exe $modfile json jsonstdout`)
