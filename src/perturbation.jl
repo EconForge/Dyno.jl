@@ -28,7 +28,8 @@ function solve(model)
     cur_inds = [i for (i,v) in enumerate(endogenous) if v in it.by_date[0]]
     past_inds = [i for (i,v) in enumerate(endogenous) if v in it.by_date[-1]]
     shocks_inds = [i for (i,v) in enumerate(exogenous) if v in it.by_date[0]]
-    parms_inds = [i for (i,v) in enumerate(parameters) if v in it.by_date[0]]
+    # parms_inds = [i for (i,v) in enumerate(parameters) if v in it.by_date[0]]
+    parms_inds = 1:length(model.symbols[:parameters])
 
     y_ss = model.calibration_grouped[:endogenous]
     e_ss = model.calibration_grouped[:exogenous]
@@ -41,8 +42,9 @@ function solve(model)
 
     f = model.functions.f_dynamic
 
-    # res = f(Der{0}, v,p)
     # check residuals are zero
+    # res = (f(Der{0}, v,p))
+    # assert(maximum(abs(res))<1e-8)
 
     jac = f(Der{1}, v,p)
 
@@ -94,8 +96,22 @@ function solve_second_order(F,G,H)
           zeros(N, N) eye(N)] ;
 
     sf = schurfact(D, E)
-    crit = 1.0
-    select = abs(sf.alpha).>crit*sf.beta
+
+    if false in ~ ((sf.alpha .== 0) .*  (sf.beta .== 0))
+        error("Indeterminate eigenvalues.")
+    end
+
+    ev = sf.beta ./ abs(sf.alpha)
+    ev[abs(sf.alpha).==0.0] = Inf
+    sort!(ev)
+    delta = ev[n_v+1] - ev[n_v]
+    if delta == 0.0
+        error("MOD solution indeterminate.")
+    end
+    cutoff = ev[n_v] + (ev[n_v+1] - ev[n_v])/2
+
+    select = (cutoff*abs(sf.alpha)) .> sf.beta
+
     ordschur!(sf, select)
 
     T = sf.S
