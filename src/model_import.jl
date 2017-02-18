@@ -14,7 +14,7 @@ type Model
     functions:: Functions
 end
 
-function Model(symbols, equations, calibration, exogenous)
+function Model(symbols, equations, calibration, exogenous; print_code=false)
 
     calibration_grouped = OrderedDict{Symbol,Array{Float64,1}}()
     for vg in [:endogenous,:exogenous,:parameters]
@@ -62,8 +62,20 @@ function Model(symbols, equations, calibration, exogenous)
     # create functions
     code_1 = make_method(ss_equations, ss_args, p_args, funname=:f_s, orders=[0,1])
     fun_temp_s = eval(code_1)
+    if print_code
+        println("****************")
+        println("Static functions")
+        println("****************")
+        println(code_1)
+    end
     code_2 = make_method(equations, v_args, p_args, funname=:f_d, orders=[0,1])
     fun_temp_d = eval(code_2)
+    if print_code
+        println("*****************")
+        println("Dynamic functions")
+        println("*****************")
+        println(code_2)
+    end
 
     functions = Functions(fun_temp_s,fun_temp_d)
 
@@ -101,7 +113,7 @@ function read_modfile(modfile)
     return model_data
 end
 
-function import_data(model_data)
+function import_data(model_data; print_code=true)
 
     # symbols_str = model_data["symbols"]
 
@@ -146,13 +158,13 @@ function import_data(model_data)
 
     exogenous = MultivariateNormal(zeros(size(sigma,1)), sigma)
 
-    model = Model(symbols, equations, calibration, exogenous)
+    model = Model(symbols, equations, calibration, exogenous; print_code=print_code)
     return model
 
 end
 
-function import_model(filename)
+function import_model(filename; print_code=false)
     model_data = read_modfile(filename)
-    model = import_data(model_data)
+    model = import_data(model_data; print_code=print_code)
     return model
 end
