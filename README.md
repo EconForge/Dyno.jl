@@ -6,7 +6,7 @@
 
 Dyno requires julia 0.5 and depends on the following Julia packages:
 
-- Dolang: `Pkg.clone("https://github.com/EconForge/Dolang")`
+- Dolang: `Pkg.add("Dolang")`
 - DataFrames: `Pkg.add("DataFrames")`
 
 - SymEngine (optional): `Pkg.add("SymEngine") (for faster calculations)
