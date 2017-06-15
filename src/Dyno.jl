@@ -1,6 +1,6 @@
 module Dyno
 
-    export import_modfile, parse_modfile, import_data, solve, simulate, deterministic
+    export import_modfile, import_data, solve, simulate, deterministic, Der, Model
 
     using Dolang
     using DataFrames
@@ -10,6 +10,8 @@ module Dyno
     import JSON
     import Dolang
     import Dolang: Der
+
+    include("sanitize.jl")
 
     include("trisystem.jl")
     include("modfile_parsing.jl")

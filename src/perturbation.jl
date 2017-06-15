@@ -97,12 +97,12 @@ function solve_second_order(F,G,H)
 
     sf = schurfact(D, E)
 
-    if false in ~ ((sf.alpha .== 0) .*  (sf.beta .== 0))
+    if false in .~((sf.alpha .== 0) .*  (sf.beta .== 0))
         error("Indeterminate eigenvalues.")
     end
 
-    ev = sf.beta ./ abs(sf.alpha)
-    ev[abs(sf.alpha).==0.0] = Inf
+    ev = sf.beta ./ abs.(sf.alpha)
+    ev[abs.(sf.alpha).==0.0] = Inf
     sort!(ev)
     delta = ev[n_v+1] - ev[n_v]
     if delta == 0.0
@@ -110,7 +110,7 @@ function solve_second_order(F,G,H)
     end
     cutoff = ev[n_v] + (ev[n_v+1] - ev[n_v])/2
 
-    select = (cutoff*abs(sf.alpha)) .> sf.beta
+    select = (cutoff*abs.(sf.alpha)) .> sf.beta
 
     ordschur!(sf, select)
 
@@ -132,19 +132,19 @@ function solve_second_order(F,G,H)
 end
 
 
-function simulate(sol::LinearSolution; N=20)
+function simulate(sol::LinearSolution, sigma::Matrix{Float64}; T=20)
     n_v = size(sol.g_0,1)
     n_e = size(sol.sigma, 1)
-    y_vec = zeros(n_v, (N+1))
-    e_vec = zeros(n_e, (N+1))
-    rnrm = MultivariateNormal(zeros(n_e), sol.sigma)
+    y_vec = zeros(n_v, (T+1))
+    e_vec = zeros(n_e, (T+1))
+    rnrm = MultivariateNormal(zeros(n_e), sigma)
     A = sol.g_y
     B = sol.g_e
     y = sol.g_0
     y_0 = sol.g_0
     y_vec[:,1] = y
-    e_vec[:,2:end] = rand(rnrm,N)
-    for t=2:N+1
+    e_vec[:,2:end] = rand(rnrm,T)
+    for t=2:T+1
         y = y_0 + A*(y-y_0) + B*e_vec[:,t]
         y_vec[:,t] = y
     end
@@ -160,7 +160,42 @@ function simulate(sol::LinearSolution; N=20)
 
 end
 
-function simulate(model::Model; N=20)
+function simulate(sol; T=20)
+    return simulate(sol, sol.sigma)
+end
+
+function simulate(model::Model; T=20)
     sol = solve(model)
-    return simulate(sol, N=N)
+    return simulate(sol, T=T)
+end
+
+
+function response(dr::LinearSolution, e0::Vector{Float64}; T=40)
+    ysim = zeros((T+1,length(dr.g_0)))
+    esim = zeros((T+1,size(dr.sigma,1)))
+    y0 = dr.g_0
+    ysim[1,:] = y0
+    esim[2,:] = e0
+    for t=1:T
+        yp = ysim[t]
+        ysim[t+1,:] = y0 + dr.g_y*(ysim[t,:]-y0) + dr.g_e*esim[t+1,:]
+    end
+    res = cat(2,ysim, esim)
+    headers = [dr.names[:endogenous]; dr.names[:exogenous]]
+    arg = Dict([headers[i]=>res[:,i] for i=1:size(res,2)])
+    return DataFrames.DataFrame(arg)
+end
+
+function response(dr::LinearSolution, var::Symbol, value::Float64; T=40)
+    index = findfirst(dr.names[:exogenous], var)
+    e0 = zeros(size(dr.sigma,1))
+    e0[index] = value
+    return response(dr, e0; T=T)
+end
+
+function response(dr::LinearSolution, var::Symbol; T=40)
+    index = findfirst(dr.names[:exogenous], var)
+    e0 = zeros(size(dr.sigma,1))
+    e0[index] = sqrt( dr.sigma[index,index] )
+    return response(dr, e0; T=T)
 end

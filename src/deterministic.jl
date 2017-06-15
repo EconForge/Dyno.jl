@@ -96,11 +96,11 @@ function deterministic(model, exogenous_series; verbose=false, N=20)
     e_final = exogenous[end,:]
 
     function fobj_start(x, out)
-        out[:] = f_s(Der{0},cat(1, x, e_start) , p)
+        out[:] = f_s(cat(1, x, e_start) , p)
     end
 
     function fobj_final(x, out)
-        out[:] = f_s(Der{0},cat(1, x, e_final) , p)
+        out[:] = f_s(cat(1, x, e_final) , p)
     end
 
 

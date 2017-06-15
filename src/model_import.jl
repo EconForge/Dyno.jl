@@ -47,8 +47,8 @@ function Model(symbols, equations, calibration, exogenous; print_code=false)
                 [(v,0) for v in sym_exo if v in it.by_date[0]]
             )
     ss_args = cat(1,
-                [(v,0) for v in sym_vars],
-                [(v,0) for v in sym_exo]
+                [(v) for v in sym_vars],
+                [(v) for v in sym_exo]
             )
     p_args = sym_parms
 
@@ -57,19 +57,23 @@ function Model(symbols, equations, calibration, exogenous; print_code=false)
     E = e
 
     # steady-state equations
+
     ss_equations = [Dolang.steady_state(eq) for eq in equations]
 
-    # create functions
-    code_1 = make_method(ss_equations, ss_args, p_args, funname=:f_s, orders=[0,1])
-    fun_temp_s = eval(code_1)
+    ff_ss = Dolang.FunctionFactory(ss_equations, ss_args, p_args, funname=:f_s)
+    # code_1 = make_function(ss_equations, ss_args, p_args, funname=:f_s, orders=[0,1])
+    code_1 = Dolang.make_function(ff_ss)
+    fun_temp_s, fun_temp_s! = eval(code_1)
     if print_code
         println("****************")
         println("Static functions")
         println("****************")
         println(code_1)
     end
-    code_2 = make_method(equations, v_args, p_args, funname=:f_d, orders=[0,1])
-    fun_temp_d = eval(code_2)
+
+    ff_d = Dolang.FunctionFactory(equations, v_args, p_args, funname=:f_d)
+    code_2 = make_function(ff_d)
+    fun_temp_d, fun_temp_d! = eval(code_2)
     if print_code
         println("*****************")
         println("Dynamic functions")
@@ -125,6 +129,11 @@ function import_data(model_data; print_code=true)
     end
     #
     equations = [parse_equation(ee["equation"]) for ee in model_data["model"]]
+
+    variables = [symbols[:endogenous]; symbols[:exogenous]]
+    equations = [sanitize(eq, variables) for eq in equations]
+
+
     #
     #list all declaration statements
     decl_stmts = []
@@ -167,4 +176,9 @@ function import_model(filename; print_code=false)
     model_data = read_modfile(filename)
     model = import_data(model_data; print_code=print_code)
     return model
+end
+
+
+function Model(filename; print_code=false)
+    return import_model(filename; print_code=print_code)
 end
