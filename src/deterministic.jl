@@ -46,8 +46,9 @@ function newton(f, init; tol=1e-8, maxit=500, backsteps=5, verbose=false)
 end
 
 
-function deterministic(model, exogenous_series; verbose=false, N=20)
+function deterministic(model, exogenous_series; verbose=false, T=100)
 
+    N=T
 
     symbols = model.symbols
     endogenous = symbols[:endogenous]
@@ -149,7 +150,9 @@ function deterministic(model, exogenous_series; verbose=false, N=20)
         return res, jac
     end
     a,b = residual(y_init)
-    println("Initial: ", maximum(abs(a)))
+    if verbose
+        println("Initial: ", maximum(abs(a)))
+    end
     sol = newton(residual, y_init, verbose=verbose)
 
     tvec = collect(0:(size(sol,1)-1))

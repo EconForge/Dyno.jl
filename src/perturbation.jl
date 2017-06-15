@@ -7,6 +7,21 @@ type LinearSolution
     sigma::Array{Float64,2}
 end
 
+function residuals(model, y)
+    f = model.functions.f_static
+    y = [model.calibration[p] for p in model.symbols[:endogenous]]
+    e = [model.calibration[p] for p in model.symbols[:exogenous]]
+    p = [model.calibration[p] for p in model.symbols[:parameters]]
+    # check residuals are zero
+    res = (f(Der{0}, [y; e],p))
+    return res
+end
+
+function residuals(model)
+    y = [model.calibration[p] for p in model.symbols[:endogenous]]
+    return residuals(model, y)
+end
+
 function solve(model)
 
     symbols = model.symbols
