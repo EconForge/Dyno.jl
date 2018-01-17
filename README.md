@@ -11,6 +11,13 @@ Dyno requires julia 0.6 and depends on the following Julia packages:
 
 - Plots (optional): `Pkg.add("Plots") (or any other plotting library)
 
+Then:
+- `Pkg.clone("https://github.com/EconForge/Dyno.jl.git")`
+
+Dyno depends on the dynare executable. It is downloaded (linux only) with:
+- `Pkg.build("Dyno")`
+
+
 ## Example
 
 From `example.jl`:
