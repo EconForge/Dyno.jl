@@ -165,7 +165,6 @@ function import_data(model_data; print_code=true)
     end
     for stmt in modfile["statements"]
         if stmt["statementName"] == "shocks"
-            println("Cool")
             if length(stmt["variance"])>0
                 exo_name = Symbol(stmt["variance"][1]["name"])
                 exo_i = findfirst(symbols[:exogenous], exo_name)
