@@ -34,9 +34,9 @@ function Model(symbols, equations, calibration, exogenous; print_code=false)
 
     v_args = cat(1, sym_vars, sym_exo)
 
-
     # analyze equations
     it = Dolang.IncidenceTable(equations)
+
 
     # we list the variables of the dynamic equations
     # only variables which appear symbolically are added to that vector
@@ -88,23 +88,18 @@ function Model(symbols, equations, calibration, exogenous; print_code=false)
 end
 
 
-function parse_equation(eq_string)
-    if '=' in eq_string
-        a, b = split(eq_string,'=')
-        lhs, rhs = parse(a), parse(b)
-        return :($rhs - $lhs)
-    else
-        return parse(eq_string)
-    end
+function parse_equation(eq::Associative{String, Any})
+    lhs = parse(eq["lhs"])
+    rhs = parse(eq["rhs"])
+    return :($rhs-$lhs)
 end
-
 
 function read_modfile(modfile)
     root_dir = Pkg.dir("Dyno")
     dynare_exe = joinpath(root_dir, "deps", "usr", "bin", "dynare_m")
 
     out = try
-        readstring(`$dynare_exe $modfile json jsonstdout`)
+        readstring(`$dynare_exe $modfile json=parse jsonstdout`)
     catch y
         # TODO: find a way to capture output
         try run(`$dynare_exe $modfile json`) end
@@ -117,27 +112,31 @@ function read_modfile(modfile)
     return model_data
 end
 
+function dumb(eq)
+    string(eq["rhs"], " - (", eq["lhs"], ")")
+end
+
 function import_data(model_data; print_code=true)
 
     # symbols_str = model_data["symbols"]
 
+    modfile = model_data["modfile"]
+
     symbols = OrderedDict()
     for k_str in ["endogenous", "exogenous", "parameters"]
-        if k_str in keys(model_data)
-            symbols[Symbol(k_str)] = [Symbol(strip(x["name"])) for x in model_data[k_str]]
-        end
+        symbols[Symbol(k_str)] = [Symbol(strip(x["name"])) for x in modfile[k_str]]
     end
+
     #
-    equations = [parse_equation(ee["equation"]) for ee in model_data["model"]]
+    equations = [parse_equation(ee) for ee in modfile["model"]]
 
     variables = [symbols[:endogenous]; symbols[:exogenous]]
     equations = [sanitize(eq, variables) for eq in equations]
 
-
     #
     #list all declaration statements
     decl_stmts = []
-    for stmt in model_data["statements"]
+    for stmt in modfile["statements"]
         if stmt["statementName"] == "param_init"
             push!(decl_stmts, stmt)
         elseif stmt["statementName"] == "init_val"
@@ -161,8 +160,21 @@ function import_data(model_data; print_code=true)
     p = length(symbols[:exogenous])
     sigma = zeros(p,p)
     for i in 1:p
-        # This is really rediculous ! (to avoid degenerate distribution)
-        sigma[i,i]=1e-10
+        # This is really ridiculous ! (to avoid degenerate distribution)
+        sigma[i,i]=1e-20
+    end
+    for stmt in modfile["statements"]
+        if stmt["statementName"] == "shocks"
+            println("Cool")
+            if length(stmt["variance"])>0
+                exo_name = Symbol(stmt["variance"][1]["name"])
+                exo_i = findfirst(symbols[:exogenous], exo_name)
+                val = stmt["variance"][1]["variance"]
+                sigma[exo_i, exo_i] = parse(Float64,val)
+            else
+                throw("Unsupported 'shocks' statement (for now).")
+            end
+        end
     end
 
     exogenous = MultivariateNormal(zeros(size(sigma,1)), sigma)
