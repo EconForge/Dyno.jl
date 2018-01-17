@@ -4,13 +4,12 @@
 
 ## Install
 
-Dyno requires julia 0.5 and depends on the following Julia packages:
+Dyno requires julia 0.6 and depends on the following Julia packages:
 
 - Dolang: `Pkg.add("Dolang")`
 - DataFrames: `Pkg.add("DataFrames")`
 
-- SymEngine (optional): `Pkg.add("SymEngine") (for faster calculations)
-- Gadfly (optional): `Pkg.add("Gadfly") (or any other plotting library)
+- Plots (optional): `Pkg.add("Plots") (or any other plotting library)
 
 ## Example
 
@@ -26,13 +25,13 @@ using Dyno
 rootdir = Pkg.dir("Dyno")
 filename = joinpath(rootdir,"examples","rbc.mod")
 
-@time model = import_modfile(filename)
+@time model = Model(filename)
 @time sol = solve(model)
 @time sim = simulate(sol)
 @time sim = simulate(model)#
 
-using Gadfly
-plot(x=sim[:t], y=sim[:y], Geom.line)
+using Plots
+plot(sim[:t], sim[:y])
 
 #####
 ##### deterministic solve
@@ -41,6 +40,6 @@ plot(x=sim[:t], y=sim[:y], Geom.line)
 exo  = [ 0.0 0.1 0.00]'
 @time sol = deterministic(model, exo, verbose=true,N=200)
 
-using Gadfly
-plot(x=sol[:t], y=sol[:y], Geom.line)
+using Plots
+plot(sol[:t], sol[:y])
 ```
