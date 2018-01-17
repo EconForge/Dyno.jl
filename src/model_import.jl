@@ -172,7 +172,7 @@ function import_data(model_data; print_code=true)
 
 end
 
-function import_model(filename; print_code=false)
+function import_modfile(filename; print_code=false)
     model_data = read_modfile(filename)
     model = import_data(model_data; print_code=print_code)
     return model
@@ -180,5 +180,5 @@ end
 
 
 function Model(filename; print_code=false)
-    return import_model(filename; print_code=print_code)
+    return import_modfile(filename; print_code=print_code)
 end
