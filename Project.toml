@@ -1,0 +1,20 @@
+name = "Dyno"
+uuid = "0810ac60-d122-425f-b12a-6a8b9e545000"
+authors = ["Pablo Winant <pablo.winant@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+Dolang = "e5c7262c-e9d2-5620-ad8e-1af14eb8a8e3"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[compat]
+DataStructures = "0.18.22"
+Distributions = "0.25.120"
+JSON = "0.21.4"
+StaticArrays = "1.9.13"

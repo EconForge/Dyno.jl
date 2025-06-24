@@ -1,17 +1,37 @@
-immutable MyType end
 
-type Functions
-    f_static
-    f_dynamic
+function read_modfile(modfile)
+
+    
+    dynare_exe = joinpath(CondaPkg.bindirs()[1], "dynare-preprocessor")
+
+    # root_dir = Pkg.dir("Dyno")
+    # dynare_exe = joinpath(root_dir, "deps", "usr", "bin", "dynare_m")
+
+    out = try
+        read(`$dynare_exe $modfile json=parse jsonstdout`, String)
+    catch y
+        # TODO: find a way to capture output
+        error("Modfile parsing failed")
+    end
+
+    regex =  r"\{(.*)\}"s
+    m = match(regex, out)
+    model_data = JSON.parse(m.match)
+    return model_data
 end
 
-type Model
+function parse_equation(eq::Dict{String, Any}; variables=Symbol[])
+    lhs = Dolang.parse_string(eq["lhs"]; variables=variables)
+    rhs = Dolang.parse_string(eq["rhs"]; variables=variables)
+    return :($rhs-$lhs)
+end
+
+struct Model{ID}
     symbols:: OrderedDict{Symbol,Array{Symbol,1}}
     equations:: Array{Expr,1}
     calibration:: Dict{Symbol, Float64}
     calibration_grouped:: Dict{Symbol, Array{Float64,1}}
     exogenous # type to be defined
-    functions:: Functions
 end
 
 function Model(symbols, equations, calibration, exogenous; print_code=false)
@@ -32,89 +52,69 @@ function Model(symbols, equations, calibration, exogenous; print_code=false)
     sym_parms = symbols[:parameters]
     sym_exo = symbols[:exogenous]
 
-    v_args = cat(1, sym_vars, sym_exo)
-
-    # analyze equations
-    it = Dolang.IncidenceTable(equations)
-
-
-    # we list the variables of the dynamic equations
-    # only variables which appear symbolically are added to that vector
-    v_args = cat(1,
-                [(v,1) for v in sym_vars if v in it.by_date[1]],
-                [(v,0) for v in sym_vars if v in it.by_date[0]],
-                [(v,-1) for v in sym_vars if v in it.by_date[-1]],
-                [(v,0) for v in sym_exo if v in it.by_date[0]]
-            )
-    ss_args = cat(1,
-                [(v) for v in sym_vars],
-                [(v) for v in sym_exo]
-            )
-    p_args = sym_parms
-
-
-    # BUG: compatibility fix: exp is converted to E by SymEngine
-    E = e
-
     # steady-state equations
 
-    ss_equations = [Dolang.steady_state(eq) for eq in equations]
+    ss_equations = OrderedDict(
+        (Symbol("eq_$i")=>Dolang.stringify(Dolang.steady_state(eq)) for (i,eq) 
+        in enumerate(equations)
+        )...
+    )
 
-    ff_ss = Dolang.FunctionFactory(ss_equations, ss_args, p_args, funname=:f_s)
+    ss_arguments = OrderedDict(
+        :y => [Dolang.stringify((v,0)) for v in sym_vars],
+        :e => [Dolang.stringify((v,0)) for v in sym_exo],
+        :p => [Dolang.stringify(e) for e in sym_parms]
+    )
+
+    d_equations = OrderedDict(
+        (Symbol("eq_$i")=>Dolang.stringify(eq) for (i,eq) 
+        in enumerate(equations)
+        )...
+    )
+    d_arguments = OrderedDict(
+        :y_2=>[Dolang.stringify(v,1) for v in sym_vars ],
+        :y_1=>[Dolang.stringify(v,0) for v in sym_vars ],
+        :y_0=>[Dolang.stringify(v,-1) for v in sym_vars ],
+        :e=>[Dolang.stringify(v,0) for v in sym_exo ],
+        :p=>[Dolang.stringify(e) for e in sym_parms]
+    )
+
+    ff_ss = Dolang.FunctionFactory(ss_equations, ss_arguments, Dict(), :f_s)
+    ff_d = Dolang.FunctionFactory(d_equations, d_arguments, Dict(), :f_d)
+
+    
     # code_1 = make_function(ss_equations, ss_args, p_args, funname=:f_s, orders=[0,1])
-    code_1 = Dolang.make_function(ff_ss)
-    fun_temp_s, fun_temp_s! = eval(code_1)
+    # code_1 = Dolang.gen_generated_gufun(ff_ss; funname= :static)
+
+    ID = gensym()
+
+    code_1 = Dolang.gen_kernel2(ff_ss, 0; funname= :static, dispatch=Model{ID})
+
     if print_code
         println("****************")
         println("Static functions")
         println("****************")
         println(code_1)
     end
+    eval(code_1)
 
-    ff_d = Dolang.FunctionFactory(equations, v_args, p_args, funname=:f_d)
-    code_2 = make_function(ff_d)
-    fun_temp_d, fun_temp_d! = eval(code_2)
+    code_2 = Dolang.gen_kernel2(ff_d, 0; funname= :dynamic, dispatch=Model{ID})
+
     if print_code
         println("*****************")
         println("Dynamic functions")
         println("*****************")
         println(code_2)
     end
+    eval(code_2)
 
-    functions = Functions(fun_temp_s,fun_temp_d)
 
-    m = Model(symbols, equations, calibration, calibration_grouped, exogenous, functions)
+
+    Model{ID}(symbols, equations, calibration, calibration_grouped, exogenous)
 
 end
 
 
-function parse_equation(eq::Associative{String, Any})
-    lhs = parse(eq["lhs"])
-    rhs = parse(eq["rhs"])
-    return :($rhs-$lhs)
-end
-
-function read_modfile(modfile)
-    root_dir = Pkg.dir("Dyno")
-    dynare_exe = joinpath(root_dir, "deps", "usr", "bin", "dynare_m")
-
-    out = try
-        readstring(`$dynare_exe $modfile json=parse jsonstdout`)
-    catch y
-        # TODO: find a way to capture output
-        try run(`$dynare_exe $modfile json`) end
-        error("Modfile parsing failed")
-    end
-
-    regex =  r"\{(.*)\}"s
-    m = match(regex, out)
-    model_data = JSON.parse(m.match)
-    return model_data
-end
-
-function dumb(eq)
-    string(eq["rhs"], " - (", eq["lhs"], ")")
-end
 
 function import_data(model_data; print_code=true)
 
@@ -127,11 +127,12 @@ function import_data(model_data; print_code=true)
         symbols[Symbol(k_str)] = [Symbol(strip(x["name"])) for x in modfile[k_str]]
     end
 
+    variables = cat(symbols[:endogenous], symbols[:exogenous]; dims=1)
     #
-    equations = [parse_equation(ee) for ee in modfile["model"]]
+    equations = [parse_equation(ee; variables=variables) for ee in modfile["model"]]
 
     variables = [symbols[:endogenous]; symbols[:exogenous]]
-    equations = [sanitize(eq, variables) for eq in equations]
+    # equations = [sanitize(eq, variables) for eq in equations]
 
     #
     #list all declaration statements
@@ -144,18 +145,26 @@ function import_data(model_data; print_code=true)
         end
     end
 
-    cdict = Dict{Symbol, Union{Symbol, Expr, Float64, Int64}}() #Symbol(k)=>parse(String(v)) for (k,v) in  model_data["calibration"])
+    # cdict = Dict{Symbol, Union{Symbol, Expr, Float64, Int64}}() #Symbol(k)=>parse(String(v)) for (k,v) in  model_data["calibration"])
+    # for stmt in decl_stmts
+    #     val = stmt["value"]
+    #     if typeof(val) <: String
+    #         cdict[Symbol(stmt["name"])] = Dolang.parse_string(val)
+    #     else
+    #         cdict[Symbol(stmt["name"])] = val
+    #     end
+    # end
+    # calibration = Dolang.solve_triangular_system(cdict)
+
+    calibration = Dict{Symbol, Float64}()
     for stmt in decl_stmts
-        val = stmt["value"]
-        if typeof(val) <: String
-            cdict[Symbol(stmt["name"])] = parse(val)
-        else
-            cdict[Symbol(stmt["name"])] = val
-        end
+        val_s = stmt["value"]
+        sym = Symbol(stmt["name"])
+        val = Dolang.eval_string(val_s, calibration)
+        calibration[sym] = val
     end
 
-    calibration = Dolang.solve_triangular_system(cdict)
-
+    # return calibration
     #
     p = length(symbols[:exogenous])
     sigma = zeros(p,p)
@@ -165,16 +174,42 @@ function import_data(model_data; print_code=true)
     end
     for stmt in modfile["statements"]
         if stmt["statementName"] == "shocks"
-            if length(stmt["variance"])>0
-                exo_name = Symbol(stmt["variance"][1]["name"])
-                exo_i = findfirst(symbols[:exogenous], exo_name)
-                val = stmt["variance"][1]["variance"]
-                sigma[exo_i, exo_i] = parse(Float64,val)
-            else
-                throw("Unsupported 'shocks' statement (for now).")
+            for stmt_var in stmt["variance"]
+                exo_name = Symbol(stmt_var["name"])
+                exo_i = findfirst(isequal(exo_name),symbols[:exogenous])
+                val_s = string(stmt_var["variance"])
+                val = Dolang.eval_string(val_s, calibration)
+                sigma[exo_i, exo_i] = val
             end
+            for stmt_var in stmt["stderr"]
+                exo_name = Symbol(stmt_var["name"])
+                # @show symbols
+                # @show exo_name
+                exo_i = findfirst(isequal(exo_name),symbols[:exogenous])
+                val_s = string(stmt_var["stderr"])
+                
+                val = Dolang.eval_string(val_s, calibration)
+                sigma[exo_i, exo_i] = val
+            end
+
+
+            for stmt_cvar in stmt["covariance"]
+                exo_name1 = Symbol(stmt_cvar["name"])
+                exo_name2 = Symbol(stmt_cvar["name2"])
+                exo_i1 = findfirst(isequal(exo_name1), symbols[:exogenous])
+                exo_i2 = findfirst(isequal(exo_name2), symbols[:exogenous])
+                val_s = string(stmt_cvar["covariance"])
+                val = Dolang.eval_string(val_s, calibration)
+                sigma[exo_i1, exo_i2] = val
+                sigma[exo_i2, exo_i1] = val
+            end
+
+            #     throw("Unsupported 'shocks' statement (for now).")
+            # end
         end
     end
+
+
 
     exogenous = MultivariateNormal(zeros(size(sigma,1)), sigma)
 
@@ -190,6 +225,6 @@ function import_modfile(filename; print_code=false)
 end
 
 
-function Model(filename; print_code=false)
-    return import_modfile(filename; print_code=print_code)
-end
+# function Model(filename; print_code=false)
+#     return import_modfile(filename; print_code=print_code)
+# end
